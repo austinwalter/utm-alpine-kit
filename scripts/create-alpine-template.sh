@@ -16,7 +16,7 @@
 #   --cpu N          CPU cores (default: 2)
 #   --disk GB        Disk size in GB (default: 20)
 #   --password PWD   Root password (default: LifeWithAlacrity2025)
-#   --ssh-key NAME   Filename of SSH key (default: id_ed25519_alpine_vm)
+#   --ssh FILENAME   Filename of SSH key (default: id_ed25519_alpine_vm)
 #   --network MODE   Network mode (default: bridged)
 #   --help           Show this help
 #
@@ -48,7 +48,7 @@ CPU_COUNT=2
 DISK_GB=20
 ROOT_PASSWORD="LifeWithAlacrity2025"
 ISO_PATH=""
-SSH_KEY="id_ed25519_alpine_vm"
+SSH_KEY_NAME="id_ed25519_alpine_vm"
 NETWORK_MODE="bridged"
 SERIAL_PORT=4444
 HTTP_PORT=8888
@@ -138,7 +138,7 @@ parse_args() {
                 shift 2
                 ;;
             --ssh)
-                SSH_KEY="$2"
+                SSH_KEY_NAME="$2"
                 shift 2
                 ;;
             --network)
@@ -222,9 +222,9 @@ validate_prerequisites() {
     fi
 
     # Check SSH key
-    if [ ! -f ~/.ssh/${SSH_KEY}.pub ]; then
-        log_error "SSH public key not found: ~/.ssh/${SSH_KEY}.pub"
-        log_info "Generate with: ssh-keygen -t ed25519 -f ~/.ssh/${SSH_KEY}"
+    if [ ! -f ~/.ssh/${SSH_KEY_NAME}.pub ]; then
+        log_error "SSH public key not found: ~/.ssh/${SSH_KEY_NAME}.pub"
+        log_info "Generate with: ssh-keygen -t ed25519 -f ~/.ssh/${SSH_KEY_NAME}"
         ((errors++))
     else
         log_info "✓ SSH key found"
@@ -264,7 +264,7 @@ prepare_answer_file() {
     log_step "Preparing Answer File"
 
     local ssh_key
-    ssh_key=$(cat ~/.ssh/${SSH_KEY}.pub)
+    ssh_key=$(cat ~/.ssh/${SSH_KEY_NAME}.pub)
 
     # Copy template and substitute SSH key
     sed "s|%%SSH_KEY%%|${ssh_key}|" "$ANSWER_FILE" > /tmp/alpine-answer.txt
@@ -435,7 +435,7 @@ sleep 15
 
 log_info "Running Alpine installation (answer file + disk + qemu-guest-agent)..."
 # Export SSH key for expect script to use
-export SSH_KEY="$(cat ~/.ssh/${$SSH_KEY}.pub)"
+export SSH_KEY="$(cat ~/.ssh/${$SSH_KEY_NAME}.pub)"
 if ! "${LIB_DIR}/install-via-answerfile.exp"; then
     log_error "Alpine installation failed"
     exit 2
@@ -501,7 +501,7 @@ if [ -n "$VM_IP" ]; then
             -o ConnectTimeout=10 \
             root@"${VM_IP}" \
             "cat > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys && sync" \
-            < ~/.ssh/"${SSH_KEY}".pub; then
+            < ~/.ssh/"${SSH_KEY_NAME}".pub; then
 
             # Verify the key was actually added
             if sshpass -p "$ROOT_PASSWORD" \
@@ -542,7 +542,7 @@ echo ""
 log_info "Template: $VM_NAME"
 log_info "Location: ~/Library/Containers/com.utmapp.UTM/Data/Documents/${VM_NAME}.utm"
 log_info "Password: $ROOT_PASSWORD"
-log_info "SSH Key: ~/.ssh/${SSH_KEY}"
+log_info "SSH Key: ~/.ssh/${SSH_KEY_NAME}"
 echo ""
 log_info "Next steps:"
 log_info "  1. Test: utmctl start $VM_NAME"
