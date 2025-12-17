@@ -235,6 +235,7 @@ for i in {1..10}; do
     VM_IP=$(utmctl ip-address "$NEW_VM_NAME" 2>/dev/null | head -1 || echo "")
     if [[ -n "$VM_IP" && "$VM_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         echo "IP detected: $VM_IP"
+        export VM_IP
         break
     fi
     sleep 2
