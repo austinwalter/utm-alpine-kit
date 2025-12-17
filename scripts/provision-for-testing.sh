@@ -1,19 +1,26 @@
 #!/bin/bash
 #
-# provision-for-testing.sh - Provision Alpine VM for Testing
+# provision-for-testing.sh
+# Provision Alpine VM for Testing
 #
-# Usage: ./provision-for-testing.sh <vm-name> <vm-ip> [repo-url] [test-command]
+# Usage: ./provision-for-testing.sh <vm-name> <vm-ip> [OPTIONS]
 #
 # Arguments:
 #   vm-name         Name of the VM
 #   vm-ip           IP address of the VM
-#   repo-url        Optional GitHub repository URL to test
-#   test-command    Optional test command (default: "make test")
+#
+# Options:
+#   -n, --name NAME     Name of the VM
+#   -i, --ip URL        IP address of the VM
+#   -s, --ssh FILENAME  Filename of SSH key (default: id_ed25519_alpine_vm)
+#   --repo URL          Optional GitHub repository URL to test
+#   --command CMD       Optional command to test (default: "make test")
+#   -h, --help          Show this help
 #
 # Examples:
-#   ./provision-for-testing.sh test-vm-1 192.168.1.100
-#   ./provision-for-testing.sh test-vm-1 192.168.1.100 https://github.com/user/repo.git
-#   ./provision-for-testing.sh test-vm-1 192.168.1.100 https://github.com/user/repo.git "npm test"
+#   ./provision-for-testing.sh --name test-vm-1 -ip 192.168.1.100
+#   ./provision-for-testing.sh -n test-vm-1 -i 192.168.1.100 --repo https://github.com/user/repo.git
+#   ./provision-for-testing.sh -n test-vm-1 -i 192.168.1.100 --repo https://github.com/user/repo.git --command "npm test"
 #
 # This script:
 # 1. Updates system packages
@@ -33,10 +40,10 @@ WORK_DIR="/root/testing"
 RESULTS_DIR="./results/$(date +%Y%m%d-%H%M%S)"
 
 # Arguments
-VM_NAME="${1:-}"
-VM_IP="${2:-}"
-REPO_URL="${3:-}"
-TEST_COMMAND="${4:-make test}"
+VM_NAME=""
+VM_IP=""
+REPO_URL=""
+TEST_COMMAND="make test"
 
 # Colors
 RED='\033[0;31m'
@@ -62,16 +69,24 @@ log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -n|--name) VM_NAME="$2"; shift 2 ;;
+        -i|--ip) VM_IP="$2"; shift 2 ;;
+        -s|--ssh) SSH_KEY="$2"; shift 2 ;;
+        --repo) REPO_URL="$2"; shift 2 ;;
+        --command) TEST_COMMAND="$2"; shift 2 ;;
+        -h|--help) show_help ;;
+        *) show_arg_error ;;
+    esac
+done
+
 # Validate arguments
 if [[ -z "$VM_NAME" ]] || [[ -z "$VM_IP" ]]; then
     log_error "VM name and IP required"
-    echo "Usage: $0 <vm-name> <vm-ip> [repo-url] [test-command]"
-    echo ""
-    echo "Examples:"
-    echo "  $0 test-vm-1 192.168.1.100"
-    echo "  $0 test-vm-1 192.168.1.100 https://github.com/user/repo.git"
-    echo "  $0 test-vm-1 192.168.1.100 https://github.com/user/repo.git 'npm test'"
-    exit 1
+    echo "Usage: $0 --name <vm-name> --ip <vm-ip> [OPTIONS]"
+    $RETURN 1
 fi
 
 PROVISION_ONLY=false
