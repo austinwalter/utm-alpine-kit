@@ -39,6 +39,16 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o Connect
 WORK_DIR="/root/testing"
 RESULTS_DIR="./results/$(date +%Y%m%d-%H%M%S)"
 
+# Change exit/return by detecting whether a script is being sourced or executed
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+if [[ $sourced -eq 1 ]]; then
+    echo "script is being sourced ..."
+    RETURN=return
+else
+    echo "script is NOT being sourced ..."
+    RETURN=exit
+fi
+
 # Arguments
 VM_NAME=""
 VM_IP=""
@@ -108,10 +118,10 @@ echo ""
 
 # Test SSH connectivity
 log_step "Testing SSH connectivity..."
-if ! ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" exit 2>/dev/null; then
+if ! ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" $RETURN 2>/dev/null; then
     log_error "Cannot connect via SSH"
     log_error "Check VM is running: utmctl status $VM_NAME"
-    exit 1
+    $RETURN 1
 fi
 log_info "SSH connected"
 
@@ -162,7 +172,7 @@ if [[ "$PROVISION_ONLY" = "true" ]]; then
     echo "Destroy when done:"
     echo "  ./scripts/destroy-vm.sh $VM_NAME"
     echo ""
-    exit 0
+    $RETURN 0
 fi
 
 # Clone repository
@@ -252,7 +262,7 @@ echo ""
 echo "========================================="
 echo "Test Complete - Exit Code: \$TEST_EXIT"
 echo "========================================="
-exit \$TEST_EXIT
+$RETURN \$TEST_EXIT
 EOF
 
 TEST_EXIT=$?
@@ -305,4 +315,4 @@ echo "Destroy when done:"
 echo "  ./scripts/destroy-vm.sh $VM_NAME"
 echo ""
 
-exit $TEST_EXIT
+$RETURN $TEST_EXIT
