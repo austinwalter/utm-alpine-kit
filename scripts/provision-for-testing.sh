@@ -34,10 +34,11 @@
 set -euo pipefail
 
 # Configuration
-SSH_KEY="$HOME/.ssh/id_ed25519_alpine_vm"
+SSH_KEY="id_ed25519_alpine_vm"
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
 WORK_DIR="/root/testing"
 RESULTS_DIR="./results/$(date +%Y%m%d-%H%M%S)"
+NL=$'\n' # Newline
 
 # Change exit/return by detecting whether a script is being sourced or executed
 (return 0 2>/dev/null) && sourced=1 || sourced=0
@@ -79,6 +80,17 @@ log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
+show_help() {
+    head -20 "$0" | tail -17
+    $RETURN 0
+}
+
+show_arg_error() {
+    echo "Error: Unknown option: $1"
+    echo "Use --help for usage information"
+    $RETURN 1
+}
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -105,6 +117,8 @@ if [[ -z "$REPO_URL" ]]; then
     PROVISION_ONLY=true
 fi
 
+SSH_PATH="$HOME/.ssh/$SSH_KEY"
+
 # Header
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -115,10 +129,11 @@ echo "VM: $VM_NAME ($VM_IP)"
 [[ -n "$REPO_URL" ]] && echo "Repo: $REPO_URL"
 [[ -n "$REPO_URL" ]] && echo "Test: $TEST_COMMAND"
 echo ""
+sleep 1
 
 # Test SSH connectivity
 log_step "Testing SSH connectivity..."
-if ! ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" $RETURN 2>/dev/null; then
+if ! ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" $RETURN 2>/dev/null; then
     log_error "Cannot connect via SSH"
     log_error "Check VM is running: utmctl status $VM_NAME"
     $RETURN 1
@@ -127,7 +142,7 @@ log_info "SSH connected"
 
 # Update system
 log_step "Updating system packages..."
-ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<'EOF'
+ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<'EOF'
 set -euo pipefail
 apk update
 apk upgrade
@@ -136,7 +151,7 @@ log_info "System updated"
 
 # Install essential dependencies
 log_step "Installing essential dependencies..."
-ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<'EOF'
+ssh $SSH_OPTS -i "$SSH_PATH" root@"$VM_IP" <<'EOF'
 set -euo pipefail
 apk add --no-cache \
     git curl wget bash sudo \
@@ -147,6 +162,8 @@ log_info "Dependencies installed"
 
 # Install Spice Agent (enables clipboard sharing in UTM)
 log_step "Installing Spice Agent for UTM..."
+ssh $SSH_OPTS -i "$SSH_PATH" root@"$VM_IP" <<'EOF'
+set -euo pipefail
 apk add alpine-sdk autoconf \
     automake glib-dev libxfixes-dev libxrandr-dev libxinerama-dev \
     spice-protocol alsa-lib-dev dbus-dev libdrm-dev libpciaccess-dev
@@ -157,7 +174,7 @@ git checkout spice-vdagent-0.23.0
 make
 make install
 EOF
-log_info "Dependencies installed"
+log_info "Spice Agent installed"
 
 # Exit if provision-only mode
 if [[ "$PROVISION_ONLY" = "true" ]]; then
@@ -175,10 +192,19 @@ if [[ "$PROVISION_ONLY" = "true" ]]; then
     $RETURN 0
 fi
 
+# Add SSH Host for github on remote VM
+ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<'EOF'
+cat >> ~/.ssh/config << EOL
+
+HOST github.com
+    StrictHostKeyChecking no
+EOL
+EOF
+
 # Clone repository
 REPO_NAME=$(basename "$REPO_URL" .git)
 log_step "Cloning repository..."
-ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<EOF
+ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<EOF
 set -euo pipefail
 mkdir -p $WORK_DIR
 cd $WORK_DIR
@@ -196,9 +222,9 @@ log_info "Repository cloned"
 log_step "Detecting project type..."
 
 # Python
-if ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" "[[ -f $WORK_DIR/$REPO_NAME/requirements.txt ]] || [[ -f $WORK_DIR/$REPO_NAME/pyproject.toml ]]"; then
+if ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" "cd $WORK_DIR/$REPO_NAME" "[[ -e requirements.txt ]] || [[ -e pyproject.toml ]]"; then
     log_info "Python project detected"
-    ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<EOF
+    ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<EOF
 apk add --no-cache python3 py3-pip
 cd $WORK_DIR/$REPO_NAME
 [[ -f requirements.txt ]] && pip3 install -r requirements.txt
@@ -207,9 +233,9 @@ EOF
 fi
 
 # Node.js
-if ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" "[[ -f $WORK_DIR/$REPO_NAME/package.json ]]"; then
+if ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" "[ $(find "$WORK_DIR/$REPO_NAME" -name "package.json") ]"; then
     log_info "Node.js project detected"
-    ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<EOF
+    ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<EOF
 apk add --no-cache nodejs npm
 cd $WORK_DIR/$REPO_NAME
 npm install
@@ -217,9 +243,9 @@ EOF
 fi
 
 # Go
-if ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" "[[ -f $WORK_DIR/$REPO_NAME/go.mod ]]"; then
+if ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" "cd $WORK_DIR/$REPO_NAME" "[[ -e go.mod ]]"; then
     log_info "Go project detected"
-    ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<EOF
+    ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<EOF
 apk add --no-cache go
 cd $WORK_DIR/$REPO_NAME
 go mod download
@@ -227,9 +253,9 @@ EOF
 fi
 
 # Rust
-if ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" "[[ -f $WORK_DIR/$REPO_NAME/Cargo.toml ]]"; then
+if ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" "cd $WORK_DIR/$REPO_NAME" "[[ -e Cargo.toml ]]"; then
     log_info "Rust project detected"
-    ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<EOF
+    ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<EOF
 apk add --no-cache rust cargo
 cd $WORK_DIR/$REPO_NAME
 cargo fetch
@@ -237,16 +263,16 @@ EOF
 fi
 
 # Make
-if ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" "[[ -f $WORK_DIR/$REPO_NAME/Makefile ]]"; then
+if ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" "cd $WORK_DIR/$REPO_NAME" "[[ -e Makefile ]]"; then
     log_info "Makefile detected"
-    ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" "apk add --no-cache make cmake"
+    ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" "apk add --no-cache make cmake"
 fi
 
 # Run tests
 log_step "Running tests: $TEST_COMMAND"
 mkdir -p "$RESULTS_DIR"
 
-ssh $SSH_OPTS -i "$SSH_KEY" root@"$VM_IP" <<EOF > "$RESULTS_DIR/test-output.log" 2>&1
+ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<EOF > "$RESULTS_DIR/test-output.log" 2>&1
 set +e
 cd $WORK_DIR/$REPO_NAME
 echo "========================================="
