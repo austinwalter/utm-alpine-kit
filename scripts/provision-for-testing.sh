@@ -135,6 +135,20 @@ apk add --no-cache \
 EOF
 log_info "Dependencies installed"
 
+# Install Spice Agent (enables clipboard sharing in UTM)
+log_step "Installing Spice Agent for UTM..."
+apk add alpine-sdk autoconf \
+    automake glib-dev libxfixes-dev libxrandr-dev libxinerama-dev \
+    spice-protocol alsa-lib-dev dbus-dev libdrm-dev libpciaccess-dev
+git clone https://gitlab.freedesktop.org/spice/linux/vd_agent.git
+cd vd_agent
+git checkout spice-vdagent-0.23.0
+./autogen.sh
+make
+make install
+EOF
+log_info "Dependencies installed"
+
 # Exit if provision-only mode
 if [[ "$PROVISION_ONLY" = "true" ]]; then
     echo ""
