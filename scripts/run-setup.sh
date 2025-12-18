@@ -33,4 +33,10 @@ trap 'trap - ERR;return' ERR
 source ./scripts/provision-for-testing.sh \
   --name "$VM_NAME" \
   --ip "$VM_IP" \
-  --ssh "$SSH_KEY"
+  --ssh "$SSH_KEY" \
+  --command "npm test"
+#  --repo "git@github.com:example/app.git" \
+
+ssh -A root@"$VM_IP" 'hostname; whoami'
+ssh -A root@"$VM_IP" "$(< ./scripts/provision.sh)"
+builtin exit 0
