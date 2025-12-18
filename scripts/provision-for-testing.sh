@@ -61,25 +61,22 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-# Helper functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+# Logging functions
+log_info() { echo -e "${GREEN}==>${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+log_step() { echo ""; echo -e "${BLUE}[STEP]${NC} $1"; }
+log_section() {
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}$*${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 }
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
-}
-
+# Command line parsing functions
 show_help() {
     head -20 "$0" | tail -17
     $RETURN 0
@@ -120,11 +117,7 @@ fi
 SSH_PATH="$HOME/.ssh/$SSH_KEY"
 
 # Header
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Provision Alpine VM for Testing"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+log_section "Provision Alpine VM for Testing"
 echo "VM: $VM_NAME ($VM_IP)"
 [[ -n "$REPO_URL" ]] && echo "Repo: $REPO_URL"
 [[ -n "$REPO_URL" ]] && echo "Test: $TEST_COMMAND"
@@ -151,10 +144,10 @@ log_info "System updated"
 
 # Install essential dependencies
 log_step "Installing essential dependencies..."
-ssh $SSH_OPTS -i "$SSH_PATH" root@"$VM_IP" <<'EOF'
+ssh $SSH_OPTS -i "$SSH_PATH" -A root@"$VM_IP" <<'EOF'
 set -euo pipefail
 apk add --no-cache \
-    git curl wget bash sudo \
+    git curl vim wget bash sudo \
     build-base linux-headers \
     ca-certificates openssl
 EOF
@@ -178,11 +171,7 @@ log_info "Spice Agent installed"
 
 # Exit if provision-only mode
 if [[ "$PROVISION_ONLY" = "true" ]]; then
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Provision Complete (system update only)"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+    log_section "Provision Complete (system update only)"
     echo "Connect to VM:"
     echo "  ssh -i $SSH_KEY root@$VM_IP"
     echo ""
@@ -314,30 +303,26 @@ Status: $(cat "$RESULTS_DIR/status.txt")
 METADATA
 
 # Summary
+log_section "Provisioning Complete"
+log_info "VM: $VM_NAME ($VM_IP)"
+log_info "Repository: $REPO_URL"
+log_info "Test Status: $(cat "$RESULTS_DIR/status.txt")"
+log_info "Exit Code: $TEST_EXIT"
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Provisioning Complete"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "VM: $VM_NAME ($VM_IP)"
-echo "Repository: $REPO_URL"
-echo "Test Status: $(cat "$RESULTS_DIR/status.txt")"
-echo "Exit Code: $TEST_EXIT"
-echo ""
-echo "Results: $RESULTS_DIR/"
+log_info "Results: $RESULTS_DIR/"
 echo "  - test-output.log"
 echo "  - status.txt"
 echo "  - exit-code.txt"
 echo "  - metadata.txt"
 echo ""
-echo "View results:"
+log_info "View results:"
 echo "  cat $RESULTS_DIR/test-output.log"
 echo ""
-echo "Connect to VM:"
+log_info "Connect to VM:"
 echo "  ssh -i $SSH_KEY root@$VM_IP"
 echo "  cd $WORK_DIR/$REPO_NAME"
 echo ""
-echo "Destroy when done:"
+log_info "Destroy when done:"
 echo "  ./scripts/destroy-vm.sh $VM_NAME"
 echo ""
 
