@@ -1,15 +1,25 @@
 #!/bin/bash
 
+# https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
+# http://redsymbol.net/articles/unofficial-bash-strict-mode
+# https://mywiki.wooledge.org/BashFAQ/105
 set -euo pipefail
 
+# Config
 NL=$'\n' # Newline
+
+# Only actually exits the shell if the exit code is non-zero
+exit() {
+  local exit_code="${1-?}"
+  test "$exit_code" -ne 0 && builtin exit "$exit_code"
+  :
+}
 
 # Arguments
 VM_NAME="Current (Alpine)"
 VM_IP=""
 SSH_KEY="id_ed25519_vm"
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
-VM_IP="192.168.64.98"
 
 # Removed the old VM with the same name
 source ./scripts/destroy-vm.sh "$VM_NAME"
